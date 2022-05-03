@@ -6,52 +6,76 @@
 // Four autofire buttons with different frequencies are allowed.
 // When "input_pin" of a button is connected to GND, "output_pin" will start auto-firing.
 // Each pulse is "frames_active" frames long, with "frames_inactive" frames between each pulse.
+int LED = 3;
+
+int SWITCH_PIN = 2;
+
+int ON_INTERVAL = 1;
+int OFF_INTERVAL = 0;
 
 struct AutofireConfig {
   int frames_active, frames_inactive, input_pin, output_pin, autofire_state;
 };
 
 AutofireConfig BUTTON_1 = {
-  /*frames_active=*/1,
-  /*frames_inactive=*/2,
-  /*input_pin=*/8,
-  /*output_pin=*/7,
-  /*autofire_state=*/0  
+  ON_INTERVAL,
+  OFF_INTERVAL,
+  21,//A3
+  15,//15
+  0  
 };
 
 AutofireConfig BUTTON_2 = {
-  /*frames_active=*/3,
-  /*frames_inactive=*/3,
-  /*input_pin=*/6,
-  /*output_pin=*/5,
-  /*autofire_state=*/0  
+  ON_INTERVAL,
+  OFF_INTERVAL,
+  20,//A2
+  14,//14
+  0  
 };
 
 AutofireConfig BUTTON_3 = {
-  /*frames_active=*/15,
-  /*frames_inactive=*/15,
-  /*input_pin=*/4,
-  /*output_pin=*/3,
-  /*autofire_state=*/0  
+  ON_INTERVAL,
+  OFF_INTERVAL,
+  19,//A1
+  16,//16
+  0  
 };
 
-AutofireConfig *BUTTONS[] = {&BUTTON_1, &BUTTON_2, &BUTTON_3};
+AutofireConfig BUTTON_4 = {
+  ON_INTERVAL,
+  OFF_INTERVAL,
+  18,//A0
+  310,//10
+  0  
+};
+
+AutofireConfig *BUTTONS[] = {&BUTTON_1, &BUTTON_2, &BUTTON_3, &BUTTON_4};
 
 // Code below.
 boolean handle_button(AutofireConfig* button) {
   boolean should_fire = !digitalRead(button->input_pin);
+  boolean afon = !digitalRead(SWITCH_PIN);
   boolean firing = false;
+ 
   if (should_fire) {
-    if (button->autofire_state++ < button->frames_active) {
+    if (
+      (afon && (button->autofire_state++ < button->frames_active))
+      || !afon
+      ) {
         digitalWrite(button->output_pin, LOW);
         pinMode(button->output_pin, OUTPUT);
         digitalWrite(button->output_pin, LOW);
         firing = true;
+        Serial.println("firing");
     } else {
         digitalWrite (button->output_pin, LOW) ;
         pinMode(button->output_pin, INPUT);
+        Serial.println("off");
     }
-    if (button->autofire_state > (button->frames_active + button->frames_inactive)) {
+    if (
+      (button->autofire_state > (button->frames_active + button->frames_inactive))
+      || !afon
+    ) {
       button->autofire_state = 0;
     }
   } else {
@@ -64,23 +88,28 @@ boolean handle_button(AutofireConfig* button) {
 
 ISR(TIMER1_COMPA_vect) {
   boolean firing = false;
-  for (int i=0; i<3; i++)
+  for (int i=0; i<4; i++)
     firing |= handle_button(BUTTONS[i]);
   if (firing)
-    digitalWrite (LED_BUILTIN, HIGH);
+    digitalWrite (LED, HIGH);
   else
-    digitalWrite (LED_BUILTIN, LOW);
+    digitalWrite (LED, LOW);
 }
 
 void setup() {
-  for (int i=0; i<3; i++) {
+  Serial.begin(9600);
+  Serial.println("Starting setup...");
+  
+  for (int i=0; i<4; i++) {
     pinMode(BUTTONS[i]->input_pin, INPUT_PULLUP);
     digitalWrite (BUTTONS[i]->output_pin, LOW) ;
     pinMode(BUTTONS[i]->output_pin, INPUT);
   }
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite (LED_BUILTIN, LOW);
+  pinMode(SWITCH_PIN, INPUT_PULLUP);
+
+  pinMode(LED, OUTPUT);
+  digitalWrite (LED, LOW);
 
   // Setup timer.
   cli();
@@ -90,6 +119,8 @@ void setup() {
   OCR1A = 33333; // = 16666 microseconds (each count is .5 us)
   TIMSK1 |= (1 << OCIE1A); // Enable compare interrupt
   sei();
+
+  Serial.println("Completed setup.");
 }
 
 void loop() { delay(1); }
